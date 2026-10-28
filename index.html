@@ -836,11 +836,20 @@ table.t td.r, table.t th.r { text-align: right; font-variant-numeric: tabular-nu
 .gs-all .ic { width: 16px; height: 16px; }
 
 /* ---- owner fixes: desktop renders at 90%, centred panel tabs, shared document preview ---- */
-/* The full laptop/desktop view sits a touch smaller, so more fits and the medical-aid column is never cut (issue 8) */
-.stage.desk:not(.zoom) { zoom: 0.9; }
+/* The full laptop/desktop view sits a touch smaller, so more fits and the medical-aid column is never cut (issue 8).
+   Only on wide screens: on a phone the same .stage.desk is the full-screen app, which must fill 100% (no 90% gap). */
+@media (min-width: 1100px) { .stage.desk:not(.zoom) { zoom: 0.9; } }
 /* The Visits panel tabs span the full panel width, three equal tabs aligned to the stage bar and the header */
 .utabs-full { width: 100%; }
 .utabs-full button { flex: 1; min-width: 0; justify-content: center; }
+.utabs-full button .flow-l, .utabs-full span.lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* On a phone the panel is full width: drop the tab icons and tighten so three tabs fit without clipping */
+@container app (max-width: 720px) {
+  .utabs-full { gap: 2px; padding: 2px; }
+  .utabs-full button { padding: 0 7px; gap: 5px; font-size: 12px; }
+  .utabs-full button .ic { display: none; }
+  .utabs-full .n { min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; }
+}
 
 /* The printable document preview (invoices, certificates, prescriptions...): a white sheet in a centred modal */
 .docprev-back { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(10,15,20,0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: dp-fade 0.18s ease-out; }
