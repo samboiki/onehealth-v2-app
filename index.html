@@ -2575,6 +2575,18 @@ div.scrim[style*="transparent"] { -webkit-backdrop-filter: none !important; back
 .dy-sms p { font-size: 14px; line-height: 1.5; color: var(--ink); }
 .dy-sheet .field + .dy-list { margin-top: 16px; }
 
+/* Block time: the clashing appointments and the "text the affected patients" option */
+.dy-clash { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 10px; background: var(--sunken); }
+.dy-clash-head { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+.dy-clash-head .ic { color: var(--serious); width: 18px; height: 18px; flex: none; }
+.dy-clash-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dy-clash-list li { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dy-clash-list .main { min-width: 0; }
+.dy-clash-list b { display: block; font-size: 14px; }
+.dy-clash-list small { display: block; font-size: 12px; color: var(--muted); }
+.dy-clash-msg { display: flex; gap: 8px; font-size: 12.5px; color: var(--ink-2); background: var(--surface); border-radius: 10px; padding: 8px 10px; line-height: 1.45; }
+.dy-clash-msg .ic { color: var(--primary-text); flex: none; width: 16px; height: 16px; margin-top: 1px; }
+
 /* ---- pages/visit.css ---- */
 /* Visit screen */
 .visit-head { display: flex; flex-direction: column; gap: 16px; }
@@ -10185,10 +10197,10 @@ function diaryRepeat(f) {
   return { ok: true, errors: [], dates };
 }
 // "Every week: 6 bookings, 28 Oct 2026 to 2 Dec 2026"
-function diaryRepWords(f, dates) {
+function diaryRepWords(f, dates, noun = 'booking') {
   const one = DIARY_REP_UNITS.find((u) => u[0] === f.repUnit)[1];
   const every = Number(f.repEvery) === 1 ? `Every ${one}` : `Every ${Number(f.repEvery)} ${one}s`;
-  return `${every}: ${dates.length} booking${dates.length === 1 ? '' : 's'}, ${diaryDmy(dates[0])} to ${diaryDmy(dates[dates.length - 1])}`;
+  return `${every}: ${dates.length} ${noun}${dates.length === 1 ? '' : 's'}, ${diaryDmy(dates[0])} to ${diaryDmy(dates[dates.length - 1])}`;
 }
 // The days after the first where the practice is closed or the practitioner already has something
 function diaryRepClashes(f, dates) {
@@ -10265,7 +10277,8 @@ function diaryOpenSheet(kind) {
   if (k === 'remind') sh.sel = Object.fromEntries(diaryTomorrow().map((x, i) => [i, !x.confirmed]));
   if (k === 'block') {
     const day = state.dash.day >= TODAY.key && bkHours(state.dash.day) ? state.dash.day : TODAY.key;
-    Object.assign(sh, { prac: 'cn', date: day, why: 'Meeting', from: '15:00', to: '16:00', note: '', tried: false });
+    Object.assign(sh, { prac: 'cn', date: day, why: 'Meeting', from: '15:00', to: '16:00', note: '', tried: false,
+      rep: false, repEvery: '1', repUnit: 'weeks', repEnds: 'count', repCount: '6', repUntil: '', repOpen: false, notify: true });
   }
   state.diarySheet = sh;
   state.pageOverlay = 'dsheet';
@@ -10324,7 +10337,33 @@ function diaryBlockCheck(sh) {
   if (!bkHours(sh.date)) e.date = 'The practice is closed on Sundays. Choose another day';
   else if (sh.date < TODAY.key) e.date = 'This day has passed. Choose today or a later day';
   if (toMin(sh.to) <= toMin(sh.from)) e.to = 'The end must be after the start';
+  if (sh.rep) { const r = diaryRepeat(sh); if (!r.ok) e.rep = r.errors.join(' '); }
   return e;
+}
+// The "Repeat this block" fields (lunch every day, a weekly meeting...), reusing the booking repeat engine
+function diaryBlRepeatField(sh) {
+  const r = sh.rep ? diaryRepeat(sh) : null;
+  const plural = Number(sh.repEvery) === 1 ? '' : 's';
+  const head = `<label class="check"><input type="checkbox" id="dy-bl-rep"${sh.rep ? ' checked' : ''}${act('diaryBlRep')}><span>Repeat this block<small>The same practitioner and time, again and again — for example lunch every day</small></span></label>`;
+  if (!sh.rep) return `<div class="field wide dy-rep">${head}</div>`;
+  const sum = r.ok
+    ? `<div class="dy-rep-sum" aria-live="polite"><b>${esc(diaryRepWords(sh, r.dates, 'block'))}</b>
+        <button type="button" class="dy-rep-link" aria-expanded="${!!sh.repOpen}"${act('diaryBlRepDays')}>${sh.repOpen ? 'Hide the days' : 'Show the days'}</button>
+        ${sh.repOpen ? `<p class="dy-rep-days">${esc(r.dates.map(bkLong).join(', '))}</p>` : ''}</div>`
+    : `<span class="hint bad" aria-live="polite">${ic('danger-circle-bold-duotone')}${esc(r.errors.join(' '))}</span>`;
+  return `<div class="field wide dy-rep">${head}
+    <div class="dy-rep-box">
+      <div class="dy-rep-row"><label for="dy-bl-rep-every" class="dy-rep-w">Every</label>
+        <div class="field dy-s"><input id="dy-bl-rep-every" type="text" inputmode="numeric" autocomplete="off" maxlength="2" value="${esc(sh.repEvery)}" data-input="diaryBlRepEvery"></div>
+        <div class="field dy-m"><select id="dy-bl-rep-unit" aria-label="Repeat unit" data-input="diaryBlRepUnit">${DIARY_REP_UNITS.map(([v, one]) => `<option value="${v}"${v === sh.repUnit ? ' selected' : ''}>${one}${plural}</option>`).join('')}</select></div></div>
+      <fieldset class="dy-rep-row"><legend class="sr">How the series ends</legend>
+        <label class="dy-rad"><input type="radio" name="dy-bl-rep-ends"${sh.repEnds === 'count' ? ' checked' : ''}${act('diaryBlRepEnds', 'count')}><span>For</span></label>
+        <div class="field dy-s"><input type="text" inputmode="numeric" autocomplete="off" maxlength="2" aria-label="Number of blocks" value="${esc(sh.repCount)}" data-input="diaryBlRepCount"${sh.repEnds === 'count' ? '' : ' disabled'}></div><span class="dy-rep-w">times</span>
+        <label class="dy-rad"><input type="radio" name="dy-bl-rep-ends"${sh.repEnds === 'until' ? ' checked' : ''}${act('diaryBlRepEnds', 'until')}><span>or until</span></label>
+        <div class="field dy-d"><input type="date" aria-label="Last day of the series" min="${esc(sh.date)}" value="${esc(sh.repUntil)}" data-input="diaryBlRepUntil"${sh.repEnds === 'until' ? '' : ' disabled'}></div>
+      </fieldset>
+      ${sum}
+    </div></div>`;
 }
 function diaryBlockSheet(sh) {
   const e = sh.tried ? diaryBlockCheck(sh) : {};
@@ -10333,6 +10372,14 @@ function diaryBlockSheet(sh) {
   const opt = (v, cur) => `<option value="${v}"${v === cur ? ' selected' : ''}>${v}</option>`;
   const len = toMin(sh.to) - toMin(sh.from);
   const hit = len > 0 ? bkItems(sh.prac, sh.date).filter((x) => toMin(x.time) < toMin(sh.to) && toMin(sh.from) < toMin(x.time) + x.len) : [];
+  const msg = `${bkPrac(sh.prac).name} is not available on ${bkShort(sh.date)}${sh.rep ? ' (and the days after)' : ''} from ${sh.from} to ${sh.to}. Please call us to rebook. — ${PRACTICE.name}`;
+  const clashBlock = hit.length ? `<div class="field wide"><div class="dy-clash">
+      <div class="dy-clash-head">${ic('danger-triangle-bold-duotone')}<b>${hit.length} appointment${hit.length === 1 ? '' : 's'} already in this time</b></div>
+      <ul class="dy-clash-list">${hit.map((x) => `<li>${avatar(x.name, 0, 'sm')}<span class="main"><b>${esc(x.name)}</b><small>${esc(x.time)} · ${esc(x.reason || 'Appointment')}</small></span></li>`).join('')}</ul>
+      <label class="check"><input type="checkbox"${sh.notify ? ' checked' : ''}${act('diaryBlNotify')}><span>Text the affected patients<small>An SMS telling them their time is affected and to call to rebook</small></span></label>
+      ${sh.notify ? `<div class="dy-clash-msg">${ic('chat-round-dots-bold-duotone')}<span>${esc(msg)}</span></div>` : ''}
+      <p class="hint">The bookings stay in the diary until you move them.</p>
+    </div></div>` : '';
   const body = `<section class="panel fsec"><div class="fhead">${tile('forbidden-circle-bold-duotone', 'stock', 'sm')}<div><h3>Block time</h3><p>Nobody can book into this time</p></div></div><div class="grid2">
     <div class="field"><label for="dy-bl-p">Practitioner</label><div class="fld-box">${ic('stethoscope-bold-duotone')}<select id="dy-bl-p" data-input="diaryBlPrac">${BK_PRACS.map((p) => `<option value="${p.id}"${p.id === sh.prac ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div></div>
     <div class="field"><label for="dy-bl-d">Date <span class="req" aria-hidden="true">*</span></label><div class="fld-box">${ic('calendar-bold-duotone')}<input id="dy-bl-d" type="date" min="${TODAY.key}" value="${esc(sh.date)}" data-input="diaryBlDate"${e.date ? ' aria-invalid="true" aria-describedby="dy-bl-d-e"' : ''}></div>${bkErr('dy-bl-d', e.date)}</div>
@@ -10340,7 +10387,8 @@ function diaryBlockSheet(sh) {
     <div class="field"><label for="dy-bl-f">From</label><div class="fld-box">${ic('clock-circle-bold-duotone')}<select id="dy-bl-f" data-input="diaryBlFrom">${times.slice(0, -1).map((v) => opt(v, sh.from)).join('')}</select></div></div>
     <div class="field"><label for="dy-bl-t">Until</label><div class="fld-box">${ic('clock-circle-bold-duotone')}<select id="dy-bl-t" data-input="diaryBlTo"${e.to ? ' aria-invalid="true" aria-describedby="dy-bl-t-e"' : ''}>${times.slice(1).map((v) => opt(v, sh.to)).join('')}</select></div>${e.to ? bkErr('dy-bl-t', e.to) : `<span class="hint">${len > 0 ? `${len} minutes` : ''}</span>`}</div>
     <div class="field wide"><label for="dy-bl-n">Note <span class="opt">(optional)</span></label><div class="fld-box">${ic('notes-bold-duotone')}<input id="dy-bl-n" type="text" autocomplete="off" placeholder="For example: staff meeting in the tea room" value="${esc(sh.note)}" data-input="diaryBlNote"></div></div>
-    ${hit.length ? `<div class="field wide"><span class="hint warn" aria-live="polite">${ic('danger-triangle-bold-duotone')}${hit.length} booking${hit.length === 1 ? ' is' : 's are'} already in this time (${esc(hit.map((x) => `${x.name} at ${x.time}`).join(', '))}). They stay in the diary: move them yourself.</span></div>` : ''}
+    ${diaryBlRepeatField(sh)}
+    ${clashBlock}
   </div></section>`;
   return diaryShell('dy-h', diaryShHead('dy-h', 'Block time', 'Leave, lunch, a meeting or the practice closed'), body, `${btn('Cancel', { act: 'closeAll' })}${btn('Block this time', { variant: 'primary', icon: 'forbidden-circle-bold-duotone', act: 'diaryBlSave' })}`, ' lg');
 }
@@ -10575,15 +10623,24 @@ PAGES.diary = {
     },
     // Blocked time
     diaryBlWhy: (w) => { state.diarySheet.why = w; },
+    diaryBlRep: () => { const sh = state.diarySheet; sh.rep = !sh.rep; if (sh.rep && !sh.repUntil) sh.repUntil = bkAddDays(sh.date, 42); },
+    diaryBlRepEnds: (v) => { const sh = state.diarySheet; sh.repEnds = v === 'until' ? 'until' : 'count'; if (!sh.repUntil) sh.repUntil = bkAddDays(sh.date, 42); },
+    diaryBlRepDays: () => { state.diarySheet.repOpen = !state.diarySheet.repOpen; },
+    diaryBlNotify: () => { state.diarySheet.notify = !state.diarySheet.notify; },
     diaryBlSave: () => {
       const sh = state.diarySheet;
       sh.tried = true;
       if (Object.keys(diaryBlockCheck(sh)).length) return;
       const why = sh.note.trim() ? `${sh.why}: ${sh.note.trim()}` : sh.why;
-      BK_BLOCKS.push({ prac: sh.prac, date: sh.date, time: sh.from, len: toMin(sh.to) - toMin(sh.from), why });
+      const len = toMin(sh.to) - toMin(sh.from);
+      const dates = sh.rep ? diaryRepeat(sh).dates : [sh.date];
+      dates.forEach((date) => BK_BLOCKS.push({ prac: sh.prac, date, time: sh.from, len, why }));
+      const hit = bkItems(sh.prac, sh.date).filter((x) => toMin(x.time) < toMin(sh.to) && toMin(sh.from) < toMin(x.time) + x.len);
+      const texted = sh.notify && hit.length ? hit.length : 0;
       closeAll();
       state.diarySheet = null;
-      toast(`Blocked ${sh.from} to ${sh.to} on ${bkShort(sh.date)} for ${bkPrac(sh.prac).name} (${sh.why.toLowerCase()})`);
+      const span = sh.rep ? `${dates.length} days` : bkShort(sh.date);
+      toast(`Blocked ${sh.from} to ${sh.to} on ${span} for ${bkPrac(sh.prac).name}${texted ? ` · ${texted} patient${texted === 1 ? '' : 's'} texted` : ''}`);
     },
     bkSave: () => {
       const bk = state.bk;
@@ -10619,7 +10676,11 @@ PAGES.diary = {
       if (toMin(sh.to) <= toMin(v)) sh.to = bkHm(Math.min(1020, toMin(v) + 60));
     },
     diaryBlTo: (v) => { state.diarySheet.to = v; },
-    diaryBlNote: (v) => { state.diarySheet.note = v; }
+    diaryBlNote: (v) => { state.diarySheet.note = v; },
+    diaryBlRepEvery: (v) => { state.diarySheet.repEvery = v.replace(/\D/g, '').slice(0, 2); },
+    diaryBlRepUnit: (v) => { state.diarySheet.repUnit = v; },
+    diaryBlRepCount: (v) => { state.diarySheet.repCount = v.replace(/\D/g, '').slice(0, 2); },
+    diaryBlRepUntil: (v) => { state.diarySheet.repUntil = v; }
   }
 };
 
