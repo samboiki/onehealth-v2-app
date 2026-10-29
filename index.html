@@ -2638,6 +2638,12 @@ div.scrim[style*="transparent"] { -webkit-backdrop-filter: none !important; back
 @container app (min-width: 1024px) { .visit-bar { bottom: 35px; margin-right: 92px; } .visit-bar .grow { flex: none; margin-left: auto; } }
 table.t tfoot td { border-bottom: 0; border-top: 1px solid var(--line); }
 
+/* Visit photos gallery (camera captures) */
+.visit-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+.vshot { margin: 0; background: var(--sunken); border-radius: 14px; overflow: hidden; }
+.vshot img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.vshot figcaption { font-size: 12px; color: var(--muted); padding: 8px 10px; }
+
 /* ---- pages/finance.css ---- */
 /* Finance: period bar, the period card, today's to-do, charts, lists, claims, debtors, reports and the sheets */
 .fin-kpi { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; width: 100%; color: inherit; }
@@ -5154,7 +5160,7 @@ function docPreview(kind, ref) {
 /* ---- take a photo (phone camera) ----
    Opens the device camera via a file input with capture, then shows the photo with Use / Retake. Works in the
    installed PWA and any browser; no permissions API needed. */
-function takePhoto(label) {
+function takePhoto(ref, label) {
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
@@ -5165,13 +5171,19 @@ function takePhoto(label) {
     inp.remove();
     if (!f) return;
     const r = new FileReader();
-    r.onload = function () { photoPreview(r.result, label || 'Photo'); };
+    r.onload = function () { photoPreview(r.result, label || 'Photo', ref); };
     r.readAsDataURL(f);
   });
   document.body.appendChild(inp);
   inp.click();
 }
-function photoPreview(src, label) {
+// A photo captured in this session, kept against a patient's file number so the avatar and the visit gallery show it
+function photoFor(ref) { return (state.shots && state.shots[ref] && state.shots[ref][0]) || ''; }
+function avatarShot(ref, name, hue, size = '') {
+  const s = photoFor(ref);
+  return s ? `<span class="av ${size}"><img src="${s}" alt="${esc(name)}"></span>` : avatar(name, hue, size);
+}
+function photoPreview(src, label, ref) {
   const back = document.createElement('div');
   back.className = 'docprev-back';
   back.innerHTML = '<div class="docprev-win" role="dialog" aria-modal="true" aria-label="Captured photo">'
@@ -5182,8 +5194,16 @@ function photoPreview(src, label) {
   const close = function () { back.remove(); };
   back.addEventListener('click', function (e) { if (e.target === back) close(); });
   back.querySelector('.dp-x').addEventListener('click', close);
-  back.querySelector('.ph-retake').addEventListener('click', function () { close(); takePhoto(label); });
-  back.querySelector('.ph-use').addEventListener('click', function () { close(); toast('Photo saved to the file'); });
+  back.querySelector('.ph-retake').addEventListener('click', function () { close(); takePhoto(ref, label); });
+  back.querySelector('.ph-use').addEventListener('click', function () {
+    close();
+    if (ref !== undefined && ref !== null && ref !== '') {
+      if (!state.shots) state.shots = {};
+      (state.shots[ref] = state.shots[ref] || []).unshift(src);
+      render();
+    }
+    toast('Photo saved to the file');
+  });
   document.body.appendChild(back);
 }
 
@@ -7239,7 +7259,7 @@ const state = {
   searchOpen: false,
   drawer: false, quick: false, profile: false, todos: false,
   tracker: false, trackerTab: 'visits', trackerFilter: 'all', notifFilter: 'all',
-  read: {}, done: {}, stages: {},
+  read: {}, done: {}, stages: {}, shots: {},
   // The practice's visit flow: whether there is a nurse (vitals) station, and whether check-ins start with the nurse.
   // Set in Settings > Practice > Visit flow. The visit screen reads this to show the right steps and hand-overs.
   flow: { hasNurse: true, nurseFirst: false },
@@ -7732,7 +7752,7 @@ const ACTIONS = {
   claimBatch: () => openOn('finOpenView', 'claims/open', 'finance'),
   toast: (text) => { closeAll(); toast(text); },
   printDoc: (arg) => { const [kind, ref] = String(arg).split('|'); docPreview(kind, ref); },
-  takePhoto: (arg) => { const p = patientByRef(Number(arg)); takePhoto(p ? `${fullName(p)} — photo` : 'Photo'); },
+  takePhoto: (arg) => { const p = patientByRef(Number(arg)); takePhoto(arg, p ? `${fullName(p)} — photo` : 'Photo'); },
   testSms: () => { closeAll(); testSmsSheet(); },
   openVisit: (id) => { closeAll(); state.visitId = id; go('visit'); },
   advance: (id) => {
@@ -9584,7 +9604,7 @@ function fileHeader(p) {
   return `<section class="panel pat-head sec-patients">
     <div class="pat-id">
       ${ibtn('alt-arrow-left-bold-duotone', 'Back to the patients list', { act: 'goto', arg: 'patients', cls: 'pat-back' })}
-      <span class="pat-avatar">${avatar(fullName(p), p.hue, 'lg')}<button type="button" class="pat-cam" aria-label="Take a photo of the patient"${act('takePhoto', p.ref)}>${ic('camera-bold-duotone')}</button></span>
+      <span class="pat-avatar">${avatarShot(p.ref, fullName(p), p.hue, 'lg')}<button type="button" class="pat-cam" aria-label="Take a photo of the patient"${act('takePhoto', p.ref)}>${ic('camera-bold-duotone')}</button></span>
       <div class="pat-id-main">
         <h1>${esc(fullName(p))}</h1>
         <p class="pat-sub num">File ${p.ref}<span>${p.age} y</span><span>${esc(p.sex)}</span><span class="desk-only">${esc(p.cell)}</span></p>
@@ -10917,6 +10937,14 @@ function visitBilling(p) {
     <div class="banner b-good" style="margin:0 16px">${ic('check-circle-bold-duotone')}Every line has a confirmed ICD-10 code: ready for the claim batch.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px 16px">${btn('Take payment', { icon: 'hand-money-bold-duotone', act: 'toast', arg: `Patient owes ${nad(total - aid)}: cash, card or EFT` })}${btn('Print invoice', { icon: 'printer-bold-duotone', variant: 'quiet', act: 'printDoc', arg: 'invoice|INV-3405' })}</div></section>`;
 }
+// The visit's Photos tab: take a photo (phone camera) and see the ones taken this session, in a thumbnail gallery
+function visitMedia(b) {
+  const shots = (state.shots && state.shots[b.ref]) || [];
+  const grid = shots.length
+    ? `<div class="visit-shots">${shots.map((s, i) => `<figure class="vshot"><img src="${s}" alt="Clinical photo ${shots.length - i}"><figcaption>Photo ${shots.length - i} · today ${esc(TODAY.now)}</figcaption></figure>`).join('')}</div>`
+    : emptyState('camera-bold-duotone', 'No photos yet. Tap Take a photo to use the camera.');
+  return `<section class="panel">${panelHead('Photos of this visit', 'Taken with the phone camera; they stay with this visit', btn('Take a photo', { size: 'sm', variant: 'primary', icon: 'camera-bold-duotone', act: 'takePhoto', arg: b.ref }))}${grid}</section>`;
+}
 function visitOther(tab) {
   const t = { history: ['Earlier visits', 'Blood pressure follow-up · 12 Aug 2026 · amlodipine continued'], media: ['Photos and files of this visit', 'Take a photo or add a file: it stays with this visit'], lab: ['Laboratory', 'Lumbar X-ray not needed. Request a test from here.'], imaging: ['Imaging', 'Lumbar spine X-ray requested today · Windhoek Radiology'] }[tab];
   const action = tab === 'history' ? btn('Open the patient file', { size: 'sm', variant: 'quiet', act: 'goto', arg: 'patient' })
@@ -10931,9 +10959,9 @@ PAGES.visit = {
     const stage = stageOf(b);
     const p = patientByRef(b.ref);
     const tab = state.visitTab || 'notes';
-    const body = tab === 'notes' ? visitNotes(b) : tab === 'documents' ? visitDocuments(b, p) : tab === 'vitals' ? visitVitals() : tab === 'meds' ? visitMeds() : tab === 'letters' ? visitLetters() : tab === 'billing' ? visitBilling(p) : visitOther(tab);
+    const body = tab === 'notes' ? visitNotes(b) : tab === 'documents' ? visitDocuments(b, p) : tab === 'vitals' ? visitVitals() : tab === 'meds' ? visitMeds() : tab === 'letters' ? visitLetters() : tab === 'billing' ? visitBilling(p) : tab === 'media' ? visitMedia(b) : visitOther(tab);
     return `<section class="panel visit-head sec-encounters">
-        <div style="display:flex;align-items:center;gap:12px">${ibtn('alt-arrow-left-bold-duotone', 'Back to the diary', { act: 'goto', arg: 'diary' })}${avatar(fullName(p), p.hue)}
+        <div style="display:flex;align-items:center;gap:12px">${ibtn('alt-arrow-left-bold-duotone', 'Back to the diary', { act: 'goto', arg: 'diary' })}${avatarShot(p.ref, fullName(p), p.hue)}
           <div style="flex:1;min-width:0"><h1 style="font-size:20px;font-weight:800;line-height:1.2">${esc(fullName(p))}</h1><p style="font-size:13px;color:var(--muted)">Visit 6 · today ${b.time} · ${esc(b.type)}${b.room ? ' · ' + esc(b.room) : ''}</p></div>
           <span class="desk-only">${pill(STAGE[stage].label, STAGE[stage].kind)}</span></div>
         ${visitFlow(stage, b)}
