@@ -1,4 +1,4 @@
-const V = "oh-1793264511831";
+const V = "oh-1793264850030";
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 self.addEventListener('message', function (e) { if (e.data === 'skipWaiting') self.skipWaiting(); });
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(CORE); }).catch(function () {})); });

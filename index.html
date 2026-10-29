@@ -27,13 +27,16 @@ img{max-width:100%}
 /* Installed app: hide the prototype's dev bar so it presents as a clean app */
 @media (display-mode: standalone){
   .proto{display:none!important}
-  /* Installed on a phone: sit the bottom menu lower. It still clears the home indicator (env inset), just with
-     less slack above it than the browser version needs. */
-  .bbar{height:calc(62px + env(safe-area-inset-bottom,0px))!important}
+  /* Installed on a phone, iOS reports ~34px of home-indicator inset. Using all of it leaves a dead white band under
+     the menu labels. We keep a trimmed inset (~14px) which still clears the indicator line, and shift the bar,
+     the FAB, the Visits button and the page's bottom padding down by the same amount. */
+  :root{--oh-sab:max(8px, calc(env(safe-area-inset-bottom,0px) - 20px))}
+  .bbar{height:calc(58px + var(--oh-sab))!important;padding-bottom:var(--oh-sab)!important}
   .bbar a,.bbar button{padding-top:2px}
-  .vbtn{bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
-  .vbtn.raised{bottom:calc(144px + env(safe-area-inset-bottom,0px))!important}
-  .fab{bottom:calc(20px + env(safe-area-inset-bottom,0px))!important}
+  .fab{bottom:calc(10px + var(--oh-sab))!important}
+  .vbtn{bottom:calc(76px + var(--oh-sab))!important}
+  .vbtn.raised{bottom:calc(140px + var(--oh-sab))!important}
+  .pg{padding-bottom:calc(156px + var(--oh-sab))!important}
 }
 /* iPhone "Add to Home Screen" helper banner (Apple has no install prompt, so we guide the manual step) */
 #ios-a2hs{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:99999;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:#1b1530;color:#fff;box-shadow:0 12px 30px rgba(0,0,0,.35);font:14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
