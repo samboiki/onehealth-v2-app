@@ -24,6 +24,13 @@ img{max-width:100%}
 [hidden]{display:none!important}
 /* Installed app: hide the prototype's dev bar so it presents as a clean app */
 @media (display-mode: standalone){ .proto{display:none!important} }
+/* iPhone "Add to Home Screen" helper banner (Apple has no install prompt, so we guide the manual step) */
+#ios-a2hs{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:99999;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:#1b1530;color:#fff;box-shadow:0 12px 30px rgba(0,0,0,.35);font:14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+#ios-a2hs img{width:40px;height:40px;border-radius:10px;flex:none}
+#ios-a2hs .a2hs-txt{flex:1;min-width:0;line-height:1.35}
+#ios-a2hs .a2hs-txt b{display:block}
+#ios-a2hs #a2hs-how{color:#c9c3e6;font-size:13px}
+#ios-a2hs #a2hs-x{flex:none;width:30px;height:30px;border:0;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:18px;line-height:1}
 </style>
 </head>
 <body>
@@ -18145,6 +18152,25 @@ boot();
 })();
 </script>
 
+<div id="ios-a2hs" hidden><img src="icon-192.png" alt=""><div class="a2hs-txt"><b>Add OneHealth to your Home Screen</b><span id="a2hs-how"></span></div><button type="button" id="a2hs-x" aria-label="Dismiss">×</button></div>
+<script>
+(function () {
+  try {
+    var ua = navigator.userAgent || '';
+    var isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var standalone = (window.navigator.standalone === true) || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    if (!isIOS || standalone) return;
+    try { if (localStorage.getItem('oh-a2hs-dismissed')) return; } catch (e) {}
+    var isSafari = !/CriOS|FxiOS|EdgiOS|OPiOS|mercury/i.test(ua);
+    var el = document.getElementById('ios-a2hs');
+    document.getElementById('a2hs-how').textContent = isSafari
+      ? 'Tap the Share button, then "Add to Home Screen".'
+      : 'Open this link in Safari, then Share > "Add to Home Screen".';
+    el.hidden = false;
+    document.getElementById('a2hs-x').addEventListener('click', function () { el.hidden = true; try { localStorage.setItem('oh-a2hs-dismissed', '1'); } catch (e) {} });
+  } catch (e) {}
+})();
+</script>
 <script>
 if ('serviceWorker' in navigator) {
   addEventListener('load', function () {
