@@ -25,7 +25,16 @@ body{margin:0;font:14px system-ui}
 img{max-width:100%}
 [hidden]{display:none!important}
 /* Installed app: hide the prototype's dev bar so it presents as a clean app */
-@media (display-mode: standalone){ .proto{display:none!important} }
+@media (display-mode: standalone){
+  .proto{display:none!important}
+  /* Installed on a phone: sit the bottom menu lower. It still clears the home indicator (env inset), just with
+     less slack above it than the browser version needs. */
+  .bbar{height:calc(62px + env(safe-area-inset-bottom,0px))!important}
+  .bbar a,.bbar button{padding-top:2px}
+  .vbtn{bottom:calc(80px + env(safe-area-inset-bottom,0px))!important}
+  .vbtn.raised{bottom:calc(144px + env(safe-area-inset-bottom,0px))!important}
+  .fab{bottom:calc(20px + env(safe-area-inset-bottom,0px))!important}
+}
 /* iPhone "Add to Home Screen" helper banner (Apple has no install prompt, so we guide the manual step) */
 #ios-a2hs{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:99999;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:#1b1530;color:#fff;box-shadow:0 12px 30px rgba(0,0,0,.35);font:14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
 #ios-a2hs img{width:40px;height:40px;border-radius:10px;flex:none}
@@ -18174,20 +18183,38 @@ boot();
 })();
 </script>
 <script>
+/* Seamless updates: nobody ever reinstalls.
+   - updateViaCache:'none' stops the browser serving a stale sw.js (it may cache it for up to 24h otherwise).
+   - We re-check for a new version every time the app is opened or brought back to the front.
+   - A new worker is activated immediately (skipWaiting) and the page reloads itself once, silently. */
 if ('serviceWorker' in navigator) {
+  var ohReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (ohReloaded) return;
+    ohReloaded = true;
+    location.reload();
+  });
   addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').then(function (reg) {
-      reg.addEventListener('updatefound', function () {
-        var w = reg.installing;
-        if (w) w.addEventListener('statechange', function () {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+      var take = function (w) {
+        if (!w) return;
+        w.addEventListener('statechange', function () {
           if (w.state === 'installed' && navigator.serviceWorker.controller) w.postMessage('skipWaiting');
         });
-      });
+      };
+      if (reg.waiting && navigator.serviceWorker.controller) reg.waiting.postMessage('skipWaiting');
+      take(reg.installing);
+      reg.addEventListener('updatefound', function () { take(reg.installing); });
+      var check = function () {
+        if (document.visibilityState !== 'visible') return;
+        try { reg.update(); } catch (e) {}
+      };
+      document.addEventListener('visibilitychange', check);
+      addEventListener('pageshow', check);
+      addEventListener('focus', check);
+      setInterval(check, 15 * 60 * 1000);
+      check();
     }).catch(function () {});
-    var reloaded = false;
-    navigator.serviceWorker.addEventListener('controllerchange', function () {
-      if (reloaded) return; reloaded = true; location.reload();
-    });
   });
 }
 </script>
