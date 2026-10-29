@@ -5187,6 +5187,49 @@ function photoPreview(src, label) {
   document.body.appendChild(back);
 }
 
+/* ---- send a real test SMS (demo) ----
+   Calls the project's public, allow-listed `demo-sms` edge function so a real text goes out through SMSPortal during a
+   demo. The publishable key below is a client key (safe to ship); the function only sends to the practice test number. */
+const DEMO_SMS = { url: 'https://jjxlfunlbyayxwvlpgwt.supabase.co/functions/v1/demo-sms', key: 'sb_publishable_dzxer8L4aIxCUOK7CnCM-A_YjHyS3En' };
+function testSmsSheet() {
+  const back = document.createElement('div');
+  back.className = 'docprev-back';
+  back.innerHTML = '<div class="docprev-win" role="dialog" aria-modal="true" aria-label="Send a test SMS" style="max-width:460px">'
+    + '<header class="docprev-top"><span class="dp-ic">' + ic('chat-round-dots-bold-duotone') + '</span><div class="dp-h"><b>Send a test SMS</b><small>A real message, through your SMS gateway</small></div>'
+    + '<button type="button" class="dp-x" aria-label="Close">' + ic('close-circle-bold-duotone') + '</button></header>'
+    + '<div class="docprev-scroll" style="background:var(--surface)">'
+    + '<div class="field"><label for="ts-ph">Phone number</label><div class="fld-box">' + ic('smartphone-2-bold-duotone') + '<input id="ts-ph" type="tel" inputmode="tel" value="0812222331"></div><span class="hint">For safety the demo only sends to the practice test number.</span></div>'
+    + '<div class="field" style="margin-top:12px"><label for="ts-msg">Message</label><textarea id="ts-msg" rows="3">OneHealth test SMS \u2014 your messaging is live.</textarea></div>'
+    + '<p class="ts-result" role="status" style="margin-top:10px;font-size:13px;min-height:1.2em"></p>'
+    + '</div>'
+    + '<footer class="docprev-foot">' + btn('Close', { cls: 'ts-close' }) + btn('Send SMS', { icon: 'plain-2-bold-duotone', variant: 'primary', cls: 'ts-send' }) + '</footer></div>';
+  const close = function () { back.remove(); };
+  back.addEventListener('click', function (e) { if (e.target === back) close(); });
+  back.querySelector('.dp-x').addEventListener('click', close);
+  back.querySelector('.ts-close').addEventListener('click', close);
+  const result = back.querySelector('.ts-result');
+  const sendBtn = back.querySelector('.ts-send');
+  sendBtn.addEventListener('click', async function () {
+    const phone = back.querySelector('#ts-ph').value;
+    const message = back.querySelector('#ts-msg').value;
+    sendBtn.disabled = true;
+    result.style.color = 'var(--muted)';
+    result.textContent = 'Sending\u2026';
+    try {
+      const res = await fetch(DEMO_SMS.url, { method: 'POST', headers: { apikey: DEMO_SMS.key, Authorization: 'Bearer ' + DEMO_SMS.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone, message: message }) });
+      const d = await res.json();
+      if (d && d.ok) { result.style.color = 'var(--good)'; result.textContent = '\u2713 Sent. The text should arrive in a few seconds.'; }
+      else { result.style.color = 'var(--bad)'; result.textContent = (d && d.error) || 'Could not send. Check the number.'; }
+    } catch (e) {
+      result.style.color = 'var(--bad)';
+      result.textContent = 'Network error. Are you online?';
+    }
+    sendBtn.disabled = false;
+  });
+  document.body.appendChild(back);
+  setTimeout(function () { const el = back.querySelector('#ts-ph'); if (el) el.focus(); }, 60);
+}
+
 /* ---- logos.js ---- */
 /* Medical aid logos: each fund's own logo (the live app's images, public/medical aids/*.png, embedded by the build as
    FUND_LOGOS), bare, at one fixed height per size so every fund lines up the same way (a white backing only in dark
@@ -7314,7 +7357,8 @@ const QUICK = [
   { label: 'Add patient', sub: 'Details and medical aid', icon: 'user-plus-bold-duotone', sec: 'patients', act: 'addPatient' },
   { label: 'Send an SMS', sub: 'To one patient or a list', icon: 'chat-round-dots-bold-duotone', sec: 'messages', act: 'goto', arg: 'messages' },
   { label: 'Submit a claim batch', sub: 'Claims to the medical aids', icon: 'bill-list-bold-duotone', sec: 'finance', act: 'claimBatch' },
-  { label: 'To-dos', sub: '3 follow-ups due today', icon: 'checklist-minimalistic-bold-duotone', sec: 'teal', act: 'todos' }
+  { label: 'To-dos', sub: '3 follow-ups due today', icon: 'checklist-minimalistic-bold-duotone', sec: 'teal', act: 'todos' },
+  { label: 'Send a test SMS', sub: 'A real text, to your test number', icon: 'chat-round-dots-bold-duotone', sec: 'messages', act: 'testSms' }
 ];
 function quickActions() {
   return `<div class="scrim" style="backdrop-filter:blur(3px)"${act('closeAll')}></div>
@@ -7689,6 +7733,7 @@ const ACTIONS = {
   toast: (text) => { closeAll(); toast(text); },
   printDoc: (arg) => { const [kind, ref] = String(arg).split('|'); docPreview(kind, ref); },
   takePhoto: (arg) => { const p = patientByRef(Number(arg)); takePhoto(p ? `${fullName(p)} — photo` : 'Photo'); },
+  testSms: () => { closeAll(); testSmsSheet(); },
   openVisit: (id) => { closeAll(); state.visitId = id; go('visit'); },
   advance: (id) => {
     const b = TODAY_BOOKINGS.find((x) => x.id === id);
