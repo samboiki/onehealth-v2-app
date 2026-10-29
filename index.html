@@ -837,8 +837,11 @@ table.t td.r, table.t th.r { text-align: right; font-variant-numeric: tabular-nu
 
 /* ---- owner fixes: desktop renders at 90%, centred panel tabs, shared document preview ---- */
 /* The full laptop/desktop view sits a touch smaller, so more fits and the medical-aid column is never cut (issue 8).
-   Only on wide screens: on a phone the same .stage.desk is the full-screen app, which must fill 100% (no 90% gap). */
-@media (min-width: 1100px) { .stage.desk:not(.zoom) { zoom: 0.9; } }
+   The zoom goes on the app itself, and its height is grown by 1/0.9 so that after the 90% zoom it still fills the
+   viewport exactly (no empty strip below). Only on wide screens: on a phone .stage.desk is the full-screen app at 100%. */
+@media (min-width: 1100px) {
+  .stage.desk:not(.zoom) > .app { zoom: 0.9; height: calc((100dvh - var(--proto-h, 0px)) / 0.9); }
+}
 /* The Visits panel tabs span the full panel width, three equal tabs aligned to the stage bar and the header */
 .utabs-full { width: 100%; }
 .utabs-full button { flex: 1; min-width: 0; justify-content: center; }
@@ -5148,6 +5151,42 @@ function docPreview(kind, ref) {
   document.body.appendChild(back);
 }
 
+/* ---- take a photo (phone camera) ----
+   Opens the device camera via a file input with capture, then shows the photo with Use / Retake. Works in the
+   installed PWA and any browser; no permissions API needed. */
+function takePhoto(label) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.setAttribute('capture', 'environment');
+  inp.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
+  inp.addEventListener('change', function () {
+    const f = inp.files && inp.files[0];
+    inp.remove();
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = function () { photoPreview(r.result, label || 'Photo'); };
+    r.readAsDataURL(f);
+  });
+  document.body.appendChild(inp);
+  inp.click();
+}
+function photoPreview(src, label) {
+  const back = document.createElement('div');
+  back.className = 'docprev-back';
+  back.innerHTML = '<div class="docprev-win" role="dialog" aria-modal="true" aria-label="Captured photo">'
+    + '<header class="docprev-top"><span class="dp-ic">' + ic('camera-bold-duotone') + '</span><div class="dp-h"><b>' + esc(label) + '</b><small>Captured just now</small></div>'
+    + '<button type="button" class="dp-x" aria-label="Close">' + ic('close-circle-bold-duotone') + '</button></header>'
+    + '<div class="docprev-scroll"><img src="' + src + '" alt="Captured photo" style="display:block;max-width:100%;border-radius:12px;margin:0 auto"></div>'
+    + '<footer class="docprev-foot">' + btn('Retake', { icon: 'camera-bold-duotone', cls: 'ph-retake' }) + btn('Use this photo', { icon: 'check-circle-bold-duotone', variant: 'primary', cls: 'ph-use' }) + '</footer></div>';
+  const close = function () { back.remove(); };
+  back.addEventListener('click', function (e) { if (e.target === back) close(); });
+  back.querySelector('.dp-x').addEventListener('click', close);
+  back.querySelector('.ph-retake').addEventListener('click', function () { close(); takePhoto(label); });
+  back.querySelector('.ph-use').addEventListener('click', function () { close(); toast('Photo saved to the file'); });
+  document.body.appendChild(back);
+}
+
 /* ---- logos.js ---- */
 /* Medical aid logos: each fund's own logo (the live app's images, public/medical aids/*.png, embedded by the build as
    FUND_LOGOS), bare, at one fixed height per size so every fund lines up the same way (a white backing only in dark
@@ -7649,6 +7688,7 @@ const ACTIONS = {
   claimBatch: () => openOn('finOpenView', 'claims/open', 'finance'),
   toast: (text) => { closeAll(); toast(text); },
   printDoc: (arg) => { const [kind, ref] = String(arg).split('|'); docPreview(kind, ref); },
+  takePhoto: (arg) => { const p = patientByRef(Number(arg)); takePhoto(p ? `${fullName(p)} — photo` : 'Photo'); },
   openVisit: (id) => { closeAll(); state.visitId = id; go('visit'); },
   advance: (id) => {
     const b = TODAY_BOOKINGS.find((x) => x.id === id);
@@ -9499,7 +9539,7 @@ function fileHeader(p) {
   return `<section class="panel pat-head sec-patients">
     <div class="pat-id">
       ${ibtn('alt-arrow-left-bold-duotone', 'Back to the patients list', { act: 'goto', arg: 'patients', cls: 'pat-back' })}
-      <span class="pat-avatar">${avatar(fullName(p), p.hue, 'lg')}<span class="pat-cam" aria-hidden="true">${ic('camera-bold-duotone')}</span></span>
+      <span class="pat-avatar">${avatar(fullName(p), p.hue, 'lg')}<button type="button" class="pat-cam" aria-label="Take a photo of the patient"${act('takePhoto', p.ref)}>${ic('camera-bold-duotone')}</button></span>
       <div class="pat-id-main">
         <h1>${esc(fullName(p))}</h1>
         <p class="pat-sub num">File ${p.ref}<span>${p.age} y</span><span>${esc(p.sex)}</span><span class="desk-only">${esc(p.cell)}</span></p>
@@ -10834,7 +10874,10 @@ function visitBilling(p) {
 }
 function visitOther(tab) {
   const t = { history: ['Earlier visits', 'Blood pressure follow-up · 12 Aug 2026 · amlodipine continued'], media: ['Photos and files of this visit', 'Take a photo or add a file: it stays with this visit'], lab: ['Laboratory', 'Lumbar X-ray not needed. Request a test from here.'], imaging: ['Imaging', 'Lumbar spine X-ray requested today · Windhoek Radiology'] }[tab];
-  return `<section class="panel">${panelHead(t[0], '', btn(tab === 'history' ? 'Open the patient file' : 'Add', { size: 'sm', variant: 'quiet', act: tab === 'history' ? 'goto' : 'toast', arg: tab === 'history' ? 'patient' : 'Opens here' }))}<p style="margin-top:10px;color:var(--ink-2)">${t[1]}</p></section>`;
+  const action = tab === 'history' ? btn('Open the patient file', { size: 'sm', variant: 'quiet', act: 'goto', arg: 'patient' })
+    : tab === 'media' ? btn('Take a photo', { size: 'sm', variant: 'primary', icon: 'camera-bold-duotone', act: 'takePhoto' })
+    : btn('Add', { size: 'sm', variant: 'quiet', act: 'toast', arg: 'Opens here' });
+  return `<section class="panel">${panelHead(t[0], '', action)}<p style="margin-top:10px;color:var(--ink-2)">${t[1]}</p></section>`;
 }
 
 PAGES.visit = {
