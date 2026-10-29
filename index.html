@@ -17,11 +17,10 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <style>
-/* Keep only the TOP safe-area inset here so content clears the notch/status bar. The app already insets its own
-   bottom bar and FAB with env(safe-area-inset-bottom), so adding it on :root too double-counts and leaves a gap
-   below the bottom menu on iPhone. */
-:root{padding-top:env(safe-area-inset-top,0px)}
-html,body{height:100%}
+/* No :root safe-area padding. With apple-mobile-web-app-status-bar-style the web content already starts below the
+   status bar, and the app insets its own bottom bar and FAB with env(safe-area-inset-bottom). Adding padding on
+   :root made the document taller than the screen and left a grey strip under the bottom menu on iPhone. */
+html,body{height:100%;overflow:hidden}
 body{margin:0;font:14px system-ui}
 img{max-width:100%}
 [hidden]{display:none!important}
