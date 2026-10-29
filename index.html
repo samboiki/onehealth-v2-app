@@ -17,7 +17,10 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <style>
-:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Keep only the TOP safe-area inset here so content clears the notch/status bar. The app already insets its own
+   bottom bar and FAB with env(safe-area-inset-bottom), so adding it on :root too double-counts and leaves a gap
+   below the bottom menu on iPhone. */
+:root{padding-top:env(safe-area-inset-top,0px)}
 html,body{height:100%}
 body{margin:0;font:14px system-ui}
 img{max-width:100%}
